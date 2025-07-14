@@ -1,0 +1,51 @@
+# Godot 4+ specific ignores
+.godot/
+
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Godot system files
+.import/
+.export/
+*.import
+*.godot/tmp
+
+# Exported builds (optional)
+bin/
+build/
+dist/
+*.exe
+*.app
+*.zip
+*.dmg
+*.pck
+
+# Caches and logs
+.cache/
+*.log
+
+# Godot Mono (if using C#)
+.mono/
+data_*/
+
+# VSCode
+.vscode/
+
+# PyInstaller (if bundling Python)
+__pycache__/
+*.spec
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+
+# JetBrains IDEs
+.idea/
+
+# Custom: ignore bundled Python binary if desired
+computer_vision_server
+computer_vision_server.exe
