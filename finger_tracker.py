@@ -32,7 +32,8 @@ class SimpleFingerTracker:
             static_image_mode=False,
             max_num_hands=1,  # Only track one hand
             min_detection_confidence=detection_confidence,
-            min_tracking_confidence=tracking_confidence
+            min_tracking_confidence=tracking_confidence,
+            # model_complexity=0  # Use the simplest model for speed
         )
         self.mp_drawing = mp.solutions.drawing_utils
         
@@ -109,25 +110,21 @@ class SimpleFingerTracker:
                     finger_tip = hand_landmarks.landmark[INDEX_FINGER_TIP]
                     
                     finger_data = {
-                        'timestamp': time.time(),
-                        'frame_count': self.frame_count,
-                        'finger_position': {
-                            'x': finger_tip.x,  # Normalized coordinates (0-1)
-                            'y': finger_tip.y,
-                            'z': finger_tip.z   # Relative depth
-                        },
-                        'hand_detected': True
+                        'x': round(finger_tip.x,3),  # Normalized coordinates (0-1)
+                        'y': round(finger_tip.y,3),
+                        'z': round(finger_tip.z,3),   # Relative depth
+                        'h': True
                     }
                     
-                    self.last_finger_pos = finger_data['finger_position']
+                    self.last_finger_pos = finger_data
                     return finger_data
         
         # No right hand detected
         return {
-            'timestamp': time.time(),
-            'frame_count': self.frame_count,
-            'finger_position': None,
-            'hand_detected': False
+            'x': None,
+            'y': None,
+            'z': None,
+            'h': False
         }
 
     def draw_finger_tracking(self, image, results):
@@ -180,7 +177,7 @@ class SimpleFingerTracker:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, connection_color, 2)
         
         # Hand detection status
-        if finger_data and finger_data['hand_detected']:
+        if finger_data and finger_data['h']:
             status_text = "RIGHT HAND DETECTED"
             status_color = (0, 255, 0)
         else:
@@ -207,9 +204,9 @@ class SimpleFingerTracker:
         
         # Setup camera
         cap = cv2.VideoCapture(camera_id)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+        cap.set(cv2.CAP_PROP_FPS, 60)
         
         if not cap.isOpened():
             print("Error: Could not open camera")
@@ -323,15 +320,8 @@ def main():
     
     args = parser.parse_args()
     
-    print("=" * 50)
+
     print("FINGER TRACKER CLIENT FOR GODOT")
-    print("=" * 50)
-    print("1. Start your Godot scene first (it should show 'TCP Server listening')")
-    print("2. Then run this script")
-    print("3. Show your RIGHT HAND to the camera")
-    print("4. Move your index finger to control the object in Godot")
-    print(f"Detection confidence: {args.detection_confidence}")
-    print(f"Tracking confidence: {args.tracking_confidence}")
     print("=" * 50)
     
     # Create and run finger tracker

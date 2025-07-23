@@ -191,8 +191,7 @@ func setup_debug_marker():
 	debug_marker = Node2D.new()
 	debug_marker.name = "FingerMarkerContainer"
 	
-	# CRITICAL FIX: Add to the EXACT same parent as the finger controller
-	# This ensures they're in the same coordinate space
+	
 	var my_parent = get_parent()
 	if my_parent:
 		my_parent.add_child(debug_marker)
@@ -337,12 +336,11 @@ func parse_finger_json(json_string: String):
 	last_finger_update = Time.get_ticks_msec() / 1000.0
 	
 	# Check if we have valid finger position data
-	if data.has("hand_detected") and data["hand_detected"] and data.has("finger_position"):
-		var finger_pos = data["finger_position"]
+	if data.has("h") and data["h"]:
 		
-		if finger_pos != null and finger_pos.has("x") and finger_pos.has("y"):
+		if data.has("x") and data.has("y"):
 			# Convert finger position (0-1) to screen coordinates first
-			var screen_pos = Vector2(finger_pos["x"], finger_pos["y"])
+			var screen_pos = Vector2(data["x"], data["y"])
 			
 			# Then convert to world coordinates using camera projection
 			var world_pos = convert_screen_to_world_position(screen_pos)
@@ -353,7 +351,7 @@ func parse_finger_json(json_string: String):
 			# Update finger control state
 			using_finger_control = true
 	
-	elif data.has("hand_detected") and not data["hand_detected"]:
+	elif data.has("h") and not data["h"]:
 		# Hand not detected - stay in current position but remain in finger mode
 		using_finger_control = true
 
