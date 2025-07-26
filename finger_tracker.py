@@ -90,42 +90,67 @@ class SimpleFingerTracker:
         except Exception as e:
             print(f"✗ Connection lost: {e}")
             self.connected = False
+            
 
     def extract_index_finger_position(self, results) -> Optional[Dict[str, Any]]:
-        """Extract right hand index finger tip position from MediaPipe results"""
+        """Extract right hand index finger tip position from MediaPipe results and detect fist gesture"""
         
         if not results.multi_hand_landmarks or not results.multi_handedness:
             return None
-        
-        # Find the right hand
+
         for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
             hand_label = handedness.classification[0].label
             
-            # Only process right hand
             if hand_label == "Right":
-                # Index finger tip is landmark 8 in MediaPipe hand model
-                INDEX_FINGER_TIP = 8
+                # Landmark indices for the fingertips of each finger
+                TIP_IDS = {
+                    'thumb': 4,
+                    'index': 8,
+                    'middle': 12,
+                    'ring': 16,
+                    'pinky': 20
+                }
+
+                tips = {}
+                for name, idx in TIP_IDS.items():
+                    if idx < len(hand_landmarks.landmark):
+                        tips[name] = hand_landmarks.landmark[idx]
+                    else:
+                        return None  # Missing data
                 
-                if len(hand_landmarks.landmark) > INDEX_FINGER_TIP:
-                    finger_tip = hand_landmarks.landmark[INDEX_FINGER_TIP]
-                    
-                    finger_data = {
-                        'x': round(finger_tip.x,3),  # Normalized coordinates (0-1)
-                        'y': round(finger_tip.y,3),
-                        'z': round(finger_tip.z,3),   # Relative depth
-                        'h': True
-                    }
-                    
-                    self.last_finger_pos = finger_data
-                    return finger_data
-        
+                # Compute pairwise distances between fingertips (2D Euclidean distance)
+                def dist(a, b):
+                    return ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
+
+                close_threshold = 0.07  # You may need to adjust this value based on your camera/resolution
+
+                # Check if all distances between fingertips are below threshold
+                tip_list = list(tips.values())
+                is_fist = all(dist(tip_list[i], tip_list[j]) < close_threshold
+                            for i in range(len(tip_list)) for j in range(i+1, len(tip_list)))
+
+                # Index finger tip for position tracking
+                index_tip = tips['index']
+                finger_data = {
+                    'x': round(index_tip.x, 3),
+                    'y': round(index_tip.y, 3),
+                    'z': round(index_tip.z, 3),
+                    'h': True,
+                    'fist': is_fist
+                }
+
+                self.last_finger_pos = finger_data
+                return finger_data
+
         # No right hand detected
         return {
             'x': None,
             'y': None,
             'z': None,
-            'h': False
+            'h': False,
+            'fist': False
         }
+
 
     def draw_finger_tracking(self, image, results):
         """Draw only the index finger tip on the image"""
@@ -158,42 +183,87 @@ class SimpleFingerTracker:
         
         return image
 
+    # def add_info_overlay(self, image, finger_data):
+    #     """Add information overlay to the image"""
+    #     # Background for text
+    #     overlay = image.copy()
+    #     cv2.rectangle(overlay, (10, 10), (350, 130), (0, 0, 0), -1)
+    #     cv2.addWeighted(overlay, 0.7, image, 0.3, 0, image)
+        
+    #     # FPS display
+    #     fps_color = (0, 255, 0) if self.current_fps >= 25 else (255, 255, 0) if self.current_fps >= 15 else (0, 0, 255)
+    #     cv2.putText(image, f"FPS: {self.current_fps:.1f}", (20, 35), 
+    #                cv2.FONT_HERSHEY_SIMPLEX, 0.6, fps_color, 2)
+        
+    #     # Connection status
+    #     connection_text = "CONNECTED TO GODOT" if self.connected else "DISCONNECTED (auto-retry)"
+    #     connection_color = (0, 255, 0) if self.connected else (0, 0, 255)
+    #     cv2.putText(image, connection_text, (20, 55), 
+    #                cv2.FONT_HERSHEY_SIMPLEX, 0.6, connection_color, 2)
+        
+    #     # Hand detection status
+    #     if finger_data and finger_data['h']:
+    #         status_text = "RIGHT HAND DETECTED"
+    #         status_color = (0, 255, 0)
+    #     else:
+    #         status_text = "NO RIGHT HAND"
+    #         status_color = (0, 0, 255)
+        
+    #     cv2.putText(image, status_text, (20, 75), 
+    #                cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
+        
+    #     # Server info
+    #     cv2.putText(image, f"Godot: {self.host}:{self.port}", (20, 95), 
+    #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+        
+    #     # Instructions
+    #     cv2.putText(image, "Press 'q' to quit, 'v' to toggle, 'r' to reconnect", (20, 115), 
+    #                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+    
     def add_info_overlay(self, image, finger_data):
         """Add information overlay to the image"""
-        # Background for text
+        # Background box
         overlay = image.copy()
-        cv2.rectangle(overlay, (10, 10), (350, 130), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (10, 10), (350, 155), (0, 0, 0), -1)  # Extended height for fist text
         cv2.addWeighted(overlay, 0.7, image, 0.3, 0, image)
-        
+
         # FPS display
         fps_color = (0, 255, 0) if self.current_fps >= 25 else (255, 255, 0) if self.current_fps >= 15 else (0, 0, 255)
         cv2.putText(image, f"FPS: {self.current_fps:.1f}", (20, 35), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, fps_color, 2)
-        
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, fps_color, 2)
+
         # Connection status
         connection_text = "CONNECTED TO GODOT" if self.connected else "DISCONNECTED (auto-retry)"
         connection_color = (0, 255, 0) if self.connected else (0, 0, 255)
         cv2.putText(image, connection_text, (20, 55), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, connection_color, 2)
-        
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, connection_color, 2)
+
         # Hand detection status
-        if finger_data and finger_data['h']:
+        if finger_data and finger_data.get('h', False):
             status_text = "RIGHT HAND DETECTED"
             status_color = (0, 255, 0)
         else:
             status_text = "NO RIGHT HAND"
             status_color = (0, 0, 255)
-        
+
         cv2.putText(image, status_text, (20, 75), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
-        
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
+
         # Server info
         cv2.putText(image, f"Godot: {self.host}:{self.port}", (20, 95), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-        
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
         # Instructions
         cv2.putText(image, "Press 'q' to quit, 'v' to toggle, 'r' to reconnect", (20, 115), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+
+        # Fist status
+        if finger_data:
+            fist_status = "FIST DETECTED" if finger_data.get("fist", False) else "Open Hand"
+            fist_color = (0, 255, 0) if finger_data.get("fist", False) else (100, 100, 255)
+            cv2.putText(image, fist_status, (20, 135), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, fist_color, 2)
+
 
     def run(self, camera_id: int = 0):
         """Main loop for finger tracking"""
